@@ -17,6 +17,8 @@ pub struct StandardEngine;
 impl StandardEngine {
     const MASK: u8 = 0x3F;
     const PADDING: char = '=';
+    const ENCODE_RSH: [u8; 4] = [18, 12, 6, 0];
+    const DECODE_RSH: [u8; 3] = [16, 8, 0];
     const ENGINE_TABLE: [u8; 64] = [
         b'A', b'B', b'C', b'D', b'E', b'F', b'G', b'H', b'I', b'J', b'K', b'L', b'M', b'N', b'O',
         b'P', b'Q', b'R', b'S', b'T', b'U', b'V', b'W', b'X', b'Y', b'Z', b'a', b'b', b'c', b'd',
@@ -27,20 +29,30 @@ impl StandardEngine {
 
     pub fn encode(&self, bytes: impl AsRef<[u8]>) -> String {
         let bytes = bytes.as_ref();
+        let mut bytes_encoded = 0usize;
         let mut encoded = String::with_capacity(bytes.len() * 4 / 3);
         for window in bytes.windows(3).step_by(3) {
-            let merged = window.iter().enumerate().fold(0, |merged, (i, byte)| {
-                let ls = 8 * (window.len() - 1 - i);
-                merged + (u32::from(*byte) << ls)
-            });
-
-            let chars = [18, 12, 6, 0]
+            let merged = self.encode_bytes_merge(window);
+            let chars = Self::ENCODE_RSH
                 .into_iter()
-                .map(|rs| (merged >> rs) & u32::from(Self::MASK))
+                .map(|rsh| (merged >> rsh) & u32::from(Self::MASK))
                 .filter(|byte| *byte > 0)
-                .map(|byte| char::from(Self::ENGINE_TABLE[byte as usize]))
-                .chain([Self::PADDING; 3])
-                .take(4);
+                .map(|byte| char::from(Self::ENGINE_TABLE[byte as usize]));
+
+            encoded.extend(chars);
+            bytes_encoded += window.len();
+        }
+
+        if bytes_encoded < bytes.len() {
+            let window = &bytes[bytes_encoded..];
+            let merged = self.encode_bytes_merge(window.iter().chain([&0, &0]).take(3));
+            let chars = Self::ENCODE_RSH
+                .into_iter()
+                .map(|rsh| (merged >> rsh) & u32::from(Self::MASK))
+                .map(|byte| match byte {
+                    0 => Self::PADDING,
+                    byte => char::from(Self::ENGINE_TABLE[byte as usize]),
+                });
 
             encoded.extend(chars);
         }
@@ -58,17 +70,25 @@ impl StandardEngine {
                     .position(|b| b == byte)
                     .unwrap_or_default();
 
-                let ls = 6 * (window.len() - 1 - i);
-                merged + (idx << ls)
+                let lsh = 6 * (3 - i);
+                merged + (idx << lsh)
             });
 
-            for rs in [16, 8, 0] {
-                let byte = u8::try_from((merged >> rs) & 0xFF).map_err(|err| err.to_string())?;
+            for rsh in Self::DECODE_RSH {
+                let byte = u8::try_from((merged >> rsh) & 0xFF).map_err(|err| err.to_string())?;
                 decoded.push(byte)
             }
         }
 
         Ok(decoded)
+    }
+
+    fn encode_bytes_merge<'a>(&self, window: impl IntoIterator<Item = &'a u8>) -> u32 {
+        let window = window.into_iter();
+        window.take(3).enumerate().fold(0, |merged, (i, byte)| {
+            let lsh = 8 * (2 - i);
+            merged + (u32::from(*byte) << lsh)
+        })
     }
 }
 
@@ -100,13 +120,12 @@ mod tests {
         assert_eq!(&encoded, "TWFueSBoYW5kcyBtYWtlIGxpZ2h0IHdvcmsu");
     }
 
-    // [TODO] adjust the code to support this test
-    // #[test]
-    // fn standard_encode_works_with_padding() {
-    //     let engine = Base64::standard();
-    //     let encoded = engine.encode("Many hands make light work");
-    //     assert_eq!(&encoded, "TWFueSBoYW5kcyBtYWtlIGxpZ2h0IHdvcms=");
-    // }
+    #[test]
+    fn standard_encode_works_with_padding() {
+        let engine = Base64::standard();
+        let encoded = engine.encode("Many hands make light work");
+        assert_eq!(&encoded, "TWFueSBoYW5kcyBtYWtlIGxpZ2h0IHdvcms=");
+    }
 
     #[test]
     fn standard_decode_works() {
