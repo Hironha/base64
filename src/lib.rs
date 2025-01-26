@@ -15,7 +15,10 @@ impl Base64 {
 pub struct StandardEngine;
 
 impl StandardEngine {
-    const MASK: u8 = 0x3F;
+    // bitmask to get first 6 bits using &(and) operator
+    const ENCODE_MASK: u32 = 0x3F;
+    // bitmask to get first 8 bits using &(and) operator
+    const DECODE_MASK: u32 = 0xFF;
     const PADDING: char = '=';
     const ENCODE_RSH: [u8; 4] = [18, 12, 6, 0];
     const DECODE_RSH: [u8; 3] = [16, 8, 0];
@@ -38,7 +41,7 @@ impl StandardEngine {
             let merged = self.merge_encode_bytes(first, second, third);
             let chars = Self::ENCODE_RSH
                 .into_iter()
-                .map(|rsh| (merged >> rsh) & u32::from(Self::MASK))
+                .map(|rsh| (merged >> rsh) & Self::ENCODE_MASK)
                 .filter(|byte| *byte > 0)
                 .map(|byte| char::from(Self::ENGINE_TABLE[byte as usize]));
 
@@ -54,7 +57,7 @@ impl StandardEngine {
             let merged = self.merge_encode_bytes(first, second, third);
             let chars = Self::ENCODE_RSH
                 .into_iter()
-                .map(|rsh| (merged >> rsh) & u32::from(Self::MASK))
+                .map(|rsh| (merged >> rsh) & Self::ENCODE_MASK)
                 .map(|byte| match byte {
                     0 => Self::PADDING,
                     byte => char::from(Self::ENGINE_TABLE[byte as usize]),
@@ -74,14 +77,19 @@ impl StandardEngine {
                 let idx = Self::ENGINE_TABLE
                     .iter()
                     .position(|b| b == byte)
+                    .and_then(|idx| u32::try_from(idx).ok())
                     .unwrap_or_default();
 
                 let lsh = 6 * (3 - i);
                 merged + (idx << lsh)
             });
 
-            for rsh in Self::DECODE_RSH {
-                let byte = u8::try_from((merged >> rsh) & 0xFF).map_err(|err| err.to_string())?;
+            for byte in Self::DECODE_RSH
+                .into_iter()
+                .map(|rsh| (merged >> rsh) & Self::DECODE_MASK)
+                .take_while(|byte| *byte > 0)
+            {
+                let byte = u8::try_from(byte).map_err(|err| err.to_string())?;
                 decoded.push(byte)
             }
         }
@@ -135,44 +143,22 @@ mod tests {
         let engine = Base64::standard();
         let input = "Many hands make light work.";
         let encoded = engine.encode(input);
-        let decoded = engine
-            .decode(encoded)
-            .ok()
-            .and_then(|decoded| String::from_utf8(decoded).ok())
-            .expect("valid decoded string");
+        let decoded = engine.decode(encoded).expect("should be able to decode");
+        let decoded_string = String::from_utf8(decoded).expect("should be a valid string");
 
-        assert_eq!(input, decoded);
+        assert_eq!(decoded_string, input);
     }
 
-    // // [TODO] make decoding work with padding
-    // #[test]
-    // fn standard_decode_works_with_padding() {
-    //     todo!()
-    // }
-
     #[test]
-    fn works() {
-        let num = 255u64;
-        assert_eq!(num & 0x3F, 63);
+    fn standard_decode_works_with_padding() {
+        let engine = Base64::standard();
+        let inputs = ["Many hands make light wor", "Many hands make light work"];
+        for input in inputs {
+            let encoded = engine.encode(input);
+            let decoded = engine.decode(encoded).expect("should be able to decode");
+            let decoded_string = String::from_utf8(decoded).expect("should be a valid string");
 
-        let string = [b'm', b'a', b'n'];
-        let first = u32::from(string[0]) << 16;
-        let second = u32::from(string[1]) << 8;
-        let third = u32::from(string[2]);
-        let merged = first + second + third;
-
-        let first = merged >> 18 & 0x3F;
-        let second = (merged >> 12) & 0x3F;
-        let third = (merged >> 6) & 0x3F;
-        let forth = merged & 0x3F;
-        println!("{first} {second} {third} {forth}");
-
-        let transformed = [first, second, third, forth]
-            .into_iter()
-            .map(|v| usize::try_from(v).expect("bro use a real computer"))
-            .map(|i| char::from(StandardEngine::ENGINE_TABLE[i]))
-            .collect::<String>();
-
-        assert_eq!(transformed, "bWFu")
+            assert_eq!(decoded_string, input);
+        }
     }
 }
