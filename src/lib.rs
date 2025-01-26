@@ -32,7 +32,11 @@ impl StandardEngine {
         let mut bytes_encoded = 0usize;
         let mut encoded = String::with_capacity(bytes.len() * 4 / 3);
         for window in bytes.windows(3).step_by(3) {
-            let merged = self.encode_bytes_merge(window);
+            let mut window = window.iter();
+            let first = window.next().copied().unwrap_or_default();
+            let second = window.next().copied().unwrap_or_default();
+            let third = window.next().copied().unwrap_or_default();
+            let merged = self.merge_encode_bytes(first, second, third);
             let chars = Self::ENCODE_RSH
                 .into_iter()
                 .map(|rsh| (merged >> rsh) & u32::from(Self::MASK))
@@ -40,12 +44,15 @@ impl StandardEngine {
                 .map(|byte| char::from(Self::ENGINE_TABLE[byte as usize]));
 
             encoded.extend(chars);
-            bytes_encoded += window.len();
+            bytes_encoded += 3;
         }
 
         if bytes_encoded < bytes.len() {
-            let window = &bytes[bytes_encoded..];
-            let merged = self.encode_bytes_merge(window.iter().chain([&0, &0]).take(3));
+            let mut window = bytes[bytes_encoded..].iter();
+            let first = window.next().copied().unwrap_or_default();
+            let second = window.next().copied().unwrap_or_default();
+            let third = window.next().copied().unwrap_or_default();
+            let merged = self.merge_encode_bytes(first, second, third);
             let chars = Self::ENCODE_RSH
                 .into_iter()
                 .map(|rsh| (merged >> rsh) & u32::from(Self::MASK))
@@ -83,12 +90,9 @@ impl StandardEngine {
         Ok(decoded)
     }
 
-    fn encode_bytes_merge<'a>(&self, window: impl IntoIterator<Item = &'a u8>) -> u32 {
-        let window = window.into_iter();
-        window.take(3).enumerate().fold(0, |merged, (i, byte)| {
-            let lsh = 8 * (2 - i);
-            merged + (u32::from(*byte) << lsh)
-        })
+    #[inline(always)]
+    fn merge_encode_bytes(&self, first: u8, second: u8, third: u8) -> u32 {
+        (u32::from(first) << 16) + (u32::from(second) << 8) + u32::from(third)
     }
 }
 
@@ -139,6 +143,12 @@ mod tests {
             .expect("valid decoded string");
 
         assert_eq!(input, decoded);
+    }
+
+    // [TODO] make decoding work with padding
+    #[test]
+    fn standard_decode_works_with_padding() {
+        todo!()
     }
 
     #[test]
