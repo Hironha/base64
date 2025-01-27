@@ -18,11 +18,11 @@ impl Base64 {
         b'8', b'9', b'-', b'_',
     ];
 
-    pub fn standard() -> Base64Engine {
+    pub const fn standard() -> Base64Engine {
         Base64Engine::new(&Self::ENGINE_TABLE_STANDARD, '=')
     }
 
-    pub fn url_safe() -> Base64Engine {
+    pub const fn url_safe() -> Base64Engine {
         Base64Engine::new(&Self::ENGINE_TABLE_URL_SAFE, '=')
     }
 }
@@ -41,7 +41,7 @@ impl Base64Engine {
     const ENCODE_RSH: [u8; 4] = [18, 12, 6, 0];
     const DECODE_RSH: [u8; 3] = [16, 8, 0];
 
-    fn new(table: &'static [u8; 64], padding: char) -> Self {
+    const fn new(table: &'static [u8; 64], padding: char) -> Self {
         Self { table, padding }
     }
 
