@@ -1,34 +1,49 @@
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Base64;
 
 impl Base64 {
-    pub fn standard() -> StandardEngine {
-        StandardEngine
-    }
-
-    pub fn url_safe() -> UrlSafeEngine {
-        UrlSafeEngine
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct StandardEngine;
-
-impl StandardEngine {
-    // bitmask to get first 6 bits using &(and) operator
-    const ENCODE_MASK: u32 = 0x3F;
-    // bitmask to get first 8 bits using &(and) operator
-    const DECODE_MASK: u32 = 0xFF;
-    const PADDING: char = '=';
-    const ENCODE_RSH: [u8; 4] = [18, 12, 6, 0];
-    const DECODE_RSH: [u8; 3] = [16, 8, 0];
-    const ENGINE_TABLE: [u8; 64] = [
+    const ENGINE_TABLE_STANDARD: [u8; 64] = [
         b'A', b'B', b'C', b'D', b'E', b'F', b'G', b'H', b'I', b'J', b'K', b'L', b'M', b'N', b'O',
         b'P', b'Q', b'R', b'S', b'T', b'U', b'V', b'W', b'X', b'Y', b'Z', b'a', b'b', b'c', b'd',
         b'e', b'f', b'g', b'h', b'i', b'j', b'k', b'l', b'm', b'n', b'o', b'p', b'q', b'r', b's',
         b't', b'u', b'v', b'w', b'x', b'y', b'z', b'0', b'1', b'2', b'3', b'4', b'5', b'6', b'7',
         b'8', b'9', b'+', b'/',
     ];
+
+    const ENGINE_TABLE_URL_SAFE: [u8; 64] = [
+        b'A', b'B', b'C', b'D', b'E', b'F', b'G', b'H', b'I', b'J', b'K', b'L', b'M', b'N', b'O',
+        b'P', b'Q', b'R', b'S', b'T', b'U', b'V', b'W', b'X', b'Y', b'Z', b'a', b'b', b'c', b'd',
+        b'e', b'f', b'g', b'h', b'i', b'j', b'k', b'l', b'm', b'n', b'o', b'p', b'q', b'r', b's',
+        b't', b'u', b'v', b'w', b'x', b'y', b'z', b'0', b'1', b'2', b'3', b'4', b'5', b'6', b'7',
+        b'8', b'9', b'-', b'_',
+    ];
+
+    pub fn standard() -> Base64Engine {
+        Base64Engine::new(&Self::ENGINE_TABLE_STANDARD, '=')
+    }
+
+    pub fn url_safe() -> Base64Engine {
+        Base64Engine::new(&Self::ENGINE_TABLE_URL_SAFE, '=')
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Base64Engine {
+    table: &'static [u8; 64],
+    padding: char,
+}
+
+impl Base64Engine {
+    // bitmask to get first 6 bits using &(and) operator
+    const ENCODE_MASK: u32 = 0x3F;
+    // bitmask to get first 8 bits using &(and) operator
+    const DECODE_MASK: u32 = 0xFF;
+    const ENCODE_RSH: [u8; 4] = [18, 12, 6, 0];
+    const DECODE_RSH: [u8; 3] = [16, 8, 0];
+
+    fn new(table: &'static [u8; 64], padding: char) -> Self {
+        Self { table, padding }
+    }
 
     pub fn encode(&self, bytes: impl AsRef<[u8]>) -> String {
         let bytes = bytes.as_ref();
@@ -43,7 +58,7 @@ impl StandardEngine {
                 .into_iter()
                 .map(|rsh| (merged >> rsh) & Self::ENCODE_MASK)
                 .filter(|byte| *byte > 0)
-                .map(|byte| char::from(Self::ENGINE_TABLE[byte as usize]));
+                .map(|byte| char::from(self.table[byte as usize]));
 
             encoded.extend(chars);
         }
@@ -59,8 +74,8 @@ impl StandardEngine {
                 .into_iter()
                 .map(|rsh| (merged >> rsh) & Self::ENCODE_MASK)
                 .map(|byte| match byte {
-                    0 => Self::PADDING,
-                    byte => char::from(Self::ENGINE_TABLE[byte as usize]),
+                    0 => self.padding,
+                    byte => char::from(self.table[byte as usize]),
                 });
 
             encoded.extend(chars);
@@ -74,7 +89,8 @@ impl StandardEngine {
         let mut decoded = Vec::<u8>::with_capacity(bytes.len() * 3 / 4);
         for window in bytes.windows(4).step_by(4) {
             let merged = window.iter().enumerate().fold(0, |merged, (i, byte)| {
-                let idx = Self::ENGINE_TABLE
+                let idx = self
+                    .table
                     .iter()
                     .position(|b| b == byte)
                     .and_then(|idx| u32::try_from(idx).ok())
@@ -102,24 +118,6 @@ impl StandardEngine {
         (u32::from(first) << 16) + (u32::from(second) << 8) + u32::from(third)
     }
 }
-
-#[derive(Clone, Debug)]
-pub struct UrlSafeEngine;
-
-impl UrlSafeEngine {
-    pub fn encode(&self, bytes: impl AsRef<[u8]>) -> String {
-        let bytes = bytes.as_ref();
-        println!("{bytes:?}");
-        todo!()
-    }
-
-    pub fn decode(&self, encoded: impl AsRef<[u8]>) -> Vec<u8> {
-        let bytes = encoded.as_ref();
-        println!("{bytes:?}");
-        todo!()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
