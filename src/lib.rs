@@ -19,11 +19,17 @@ impl Base64 {
     ];
 
     pub const fn standard() -> Base64Engine {
-        Base64Engine::new(&Self::ENGINE_TABLE_STANDARD, '=')
+        Base64Engine {
+            table: &Self::ENGINE_TABLE_STANDARD,
+            padding: '=',
+        }
     }
 
     pub const fn url_safe() -> Base64Engine {
-        Base64Engine::new(&Self::ENGINE_TABLE_URL_SAFE, '=')
+        Base64Engine {
+            table: &Self::ENGINE_TABLE_URL_SAFE,
+            padding: '=',
+        }
     }
 }
 
@@ -40,10 +46,6 @@ impl Base64Engine {
     const DECODE_MASK: u32 = 0xFF;
     const ENCODE_RSH: [u8; 4] = [18, 12, 6, 0];
     const DECODE_RSH: [u8; 3] = [16, 8, 0];
-
-    const fn new(table: &'static [u8; 64], padding: char) -> Self {
-        Self { table, padding }
-    }
 
     pub fn encode(&self, bytes: impl AsRef<[u8]>) -> String {
         let bytes = bytes.as_ref();
