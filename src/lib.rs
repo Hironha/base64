@@ -104,10 +104,10 @@ impl Base64Engine {
 
             for byte in Self::DECODE_RSH
                 .into_iter()
-                .map(|rsh| (merged >> rsh) & Self::DECODE_MASK)
+                // guaranteed to fit in u8 since we masked with `DECODE_MASK`
+                .map(|rsh| ((merged >> rsh) & Self::DECODE_MASK) as u8)
                 .take_while(|byte| *byte > 0)
             {
-                let byte = u8::try_from(byte).map_err(|err| err.to_string())?;
                 decoded.push(byte)
             }
         }
