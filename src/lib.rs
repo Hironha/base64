@@ -50,7 +50,7 @@ impl Base64Engine {
     pub fn encode(&self, bytes: impl AsRef<[u8]>) -> String {
         let bytes = bytes.as_ref();
         let mut encoded = String::with_capacity(bytes.len() * 4 / 3);
-        for window in bytes.windows(3).step_by(3) {
+        for window in bytes.chunks_exact(3) {
             let mut window = window.iter();
             let first = window.next().copied().unwrap_or_default();
             let second = window.next().copied().unwrap_or_default();
@@ -89,7 +89,7 @@ impl Base64Engine {
     pub fn decode(&self, encoded: impl AsRef<[u8]>) -> Result<Vec<u8>, String> {
         let bytes = encoded.as_ref();
         let mut decoded = Vec::<u8>::with_capacity(bytes.len() * 3 / 4);
-        for window in bytes.windows(4).step_by(4) {
+        for window in bytes.chunks_exact(4) {
             let merged = window.iter().enumerate().fold(0, |merged, (i, byte)| {
                 let idx = self
                     .table
