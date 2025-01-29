@@ -51,11 +51,12 @@ impl Base64Engine {
         let bytes = bytes.as_ref();
         let mut encoded = String::with_capacity(bytes.len() * 4 / 3);
         for window in bytes.chunks_exact(3) {
-            let mut window = window.iter();
-            let first = window.next().copied().unwrap_or_default();
-            let second = window.next().copied().unwrap_or_default();
-            let third = window.next().copied().unwrap_or_default();
-            let merged = self.merge_encode_bytes(first, second, third);
+            let merged = match window {
+                [first, second, third] => self.merge_encode_bytes(*first, *second, *third),
+                [first, second] => self.merge_encode_bytes(*first, *second, 0),
+                [first] => self.merge_encode_bytes(*first, 0, 0),
+                _ => self.merge_encode_bytes(0, 0, 0),
+            };
             let chars = Self::ENCODE_RSH
                 .into_iter()
                 .map(|rsh| (merged >> rsh) & Self::ENCODE_MASK)
@@ -67,11 +68,12 @@ impl Base64Engine {
 
         let remaining_bytes = bytes.len() % 3;
         if remaining_bytes != 0 {
-            let mut window = bytes[bytes.len() - remaining_bytes..].iter();
-            let first = window.next().copied().unwrap_or_default();
-            let second = window.next().copied().unwrap_or_default();
-            let third = window.next().copied().unwrap_or_default();
-            let merged = self.merge_encode_bytes(first, second, third);
+            let merged = match &bytes[bytes.len() - remaining_bytes..] {
+                [first, second, third] => self.merge_encode_bytes(*first, *second, *third),
+                [first, second] => self.merge_encode_bytes(*first, *second, 0),
+                [first] => self.merge_encode_bytes(*first, 0, 0),
+                _ => self.merge_encode_bytes(0, 0, 0),
+            };
             let chars = Self::ENCODE_RSH
                 .into_iter()
                 .map(|rsh| (merged >> rsh) & Self::ENCODE_MASK)
