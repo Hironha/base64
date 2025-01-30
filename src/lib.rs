@@ -2,7 +2,7 @@
 pub struct Base64;
 
 impl Base64 {
-    const ENGINE_TABLE_STANDARD: [u8; 64] = [
+    const ALPHABET_STANDARD: [u8; 64] = [
         b'A', b'B', b'C', b'D', b'E', b'F', b'G', b'H', b'I', b'J', b'K', b'L', b'M', b'N', b'O',
         b'P', b'Q', b'R', b'S', b'T', b'U', b'V', b'W', b'X', b'Y', b'Z', b'a', b'b', b'c', b'd',
         b'e', b'f', b'g', b'h', b'i', b'j', b'k', b'l', b'm', b'n', b'o', b'p', b'q', b'r', b's',
@@ -10,7 +10,7 @@ impl Base64 {
         b'8', b'9', b'+', b'/',
     ];
 
-    const ENGINE_TABLE_URL_SAFE: [u8; 64] = [
+    const ALPHABET_URL_SAFE: [u8; 64] = [
         b'A', b'B', b'C', b'D', b'E', b'F', b'G', b'H', b'I', b'J', b'K', b'L', b'M', b'N', b'O',
         b'P', b'Q', b'R', b'S', b'T', b'U', b'V', b'W', b'X', b'Y', b'Z', b'a', b'b', b'c', b'd',
         b'e', b'f', b'g', b'h', b'i', b'j', b'k', b'l', b'm', b'n', b'o', b'p', b'q', b'r', b's',
@@ -20,14 +20,14 @@ impl Base64 {
 
     pub const fn standard() -> Base64Engine {
         Base64Engine {
-            table: &Self::ENGINE_TABLE_STANDARD,
+            alphabet: &Self::ALPHABET_STANDARD,
             padding: '=',
         }
     }
 
     pub const fn url_safe() -> Base64Engine {
         Base64Engine {
-            table: &Self::ENGINE_TABLE_URL_SAFE,
+            alphabet: &Self::ALPHABET_URL_SAFE,
             padding: '=',
         }
     }
@@ -35,7 +35,7 @@ impl Base64 {
 
 #[derive(Clone, Debug)]
 pub struct Base64Engine {
-    table: &'static [u8; 64],
+    alphabet: &'static [u8; 64],
     padding: char,
 }
 
@@ -61,10 +61,17 @@ impl Base64Engine {
                 .into_iter()
                 .map(|rsh| (merged >> rsh) & Self::ENCODE_MASK)
                 .filter(|byte| *byte > 0)
-                .map(|byte| char::from(self.table[byte as usize]));
+                .map(|byte| char::from(self.alphabet[byte as usize]));
 
             encoded.extend(chars);
         }
+
+        encoded
+    }
+
+    pub fn encode_with_padding(&self, bytes: impl AsRef<[u8]>) -> String {
+        let bytes = bytes.as_ref();
+        let mut encoded = self.encode(bytes);
 
         let remaining_bytes = bytes.len() % 3;
         if remaining_bytes != 0 {
@@ -79,7 +86,7 @@ impl Base64Engine {
                 .map(|rsh| (merged >> rsh) & Self::ENCODE_MASK)
                 .map(|byte| match byte {
                     0 => self.padding,
-                    byte => char::from(self.table[byte as usize]),
+                    byte => char::from(self.alphabet[byte as usize]),
                 });
 
             encoded.extend(chars);
@@ -94,7 +101,7 @@ impl Base64Engine {
         for window in bytes.chunks_exact(4) {
             let merged = window.iter().enumerate().fold(0, |merged, (i, byte)| {
                 let idx = self
-                    .table
+                    .alphabet
                     .iter()
                     .position(|b| b == byte)
                     .and_then(|idx| u32::try_from(idx).ok())
@@ -136,7 +143,7 @@ mod tests {
     #[test]
     fn standard_encode_works_with_padding() {
         let engine = Base64::standard();
-        let encoded = engine.encode("Many hands make light work");
+        let encoded = engine.encode_with_padding("Many hands make light work");
         assert_eq!(&encoded, "TWFueSBoYW5kcyBtYWtlIGxpZ2h0IHdvcms=");
     }
 
@@ -156,7 +163,7 @@ mod tests {
         let engine = Base64::standard();
         let inputs = ["Many hands make light wor", "Many hands make light work"];
         for input in inputs {
-            let encoded = engine.encode(input);
+            let encoded = engine.encode_with_padding(input);
             let decoded = engine.decode(encoded).expect("should be able to decode");
             let decoded_string = String::from_utf8(decoded).expect("should be a valid string");
 
