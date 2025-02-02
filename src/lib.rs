@@ -50,13 +50,14 @@ impl Base64Engine {
     pub fn encode(&self, bytes: impl AsRef<[u8]>) -> String {
         let bytes = bytes.as_ref();
         let mut encoded = String::with_capacity(bytes.len() * 4 / 3);
+
         for window in bytes.chunks_exact(3) {
             let merged = match window {
                 [first, second, third] => self.merge_encode_bytes(*first, *second, *third),
-                [first, second] => self.merge_encode_bytes(*first, *second, 0),
-                [first] => self.merge_encode_bytes(*first, 0, 0),
-                _ => self.merge_encode_bytes(0, 0, 0),
+                // guaranteed to have a window o len 3 due `chunks_exact` method
+                w => panic!("received encoding window with len {}", w.len()),
             };
+
             let chars = Self::ENCODE_RSH
                 .into_iter()
                 .map(|rsh| (merged >> rsh) & Self::ENCODE_MASK)
@@ -66,21 +67,14 @@ impl Base64Engine {
             encoded.extend(chars);
         }
 
-        encoded
-    }
-
-    pub fn encode_with_padding(&self, bytes: impl AsRef<[u8]>) -> String {
-        let bytes = bytes.as_ref();
-        let mut encoded = self.encode(bytes);
-
         let remaining_bytes = bytes.len() % 3;
         if remaining_bytes != 0 {
             let merged = match &bytes[bytes.len() - remaining_bytes..] {
-                [first, second, third] => self.merge_encode_bytes(*first, *second, *third),
                 [first, second] => self.merge_encode_bytes(*first, *second, 0),
                 [first] => self.merge_encode_bytes(*first, 0, 0),
                 _ => self.merge_encode_bytes(0, 0, 0),
             };
+
             let chars = Self::ENCODE_RSH
                 .into_iter()
                 .map(|rsh| (merged >> rsh) & Self::ENCODE_MASK)
@@ -98,18 +92,18 @@ impl Base64Engine {
     pub fn decode(&self, encoded: impl AsRef<[u8]>) -> Result<Vec<u8>, String> {
         let bytes = encoded.as_ref();
         let mut decoded = Vec::<u8>::with_capacity(bytes.len() * 3 / 4);
+
         for window in bytes.chunks_exact(4) {
-            let merged = window.iter().enumerate().fold(0, |merged, (i, byte)| {
-                let idx = self
-                    .alphabet
-                    .iter()
-                    .position(|b| b == byte)
-                    .and_then(|idx| u32::try_from(idx).ok())
-                    .unwrap_or_default();
+            let merged = window.iter().enumerate().try_fold(0, |merged, (i, byte)| {
+                let idx = match self.alphabet.iter().position(|b| b == byte) {
+                    Some(idx) => u32::try_from(idx).ok().unwrap_or_default(),
+                    None if *byte == b'=' => 0u32,
+                    None => return Err(format!("invalid base64 byte: {byte:0x}")),
+                };
 
                 let lsh = 6 * (3 - i);
-                merged + (idx << lsh)
-            });
+                Ok(merged + (idx << lsh))
+            })?;
 
             for byte in Self::DECODE_RSH
                 .into_iter()
@@ -135,35 +129,25 @@ mod tests {
 
     #[test]
     fn standard_encode_works() {
-        let engine = Base64::standard();
-        let encoded = engine.encode("Many hands make light work.");
-        assert_eq!(&encoded, "TWFueSBoYW5kcyBtYWtlIGxpZ2h0IHdvcmsu");
-    }
+        let config = [
+            ("light w", "bGlnaHQgdw=="),
+            ("light wo", "bGlnaHQgd28="),
+            ("light wor", "bGlnaHQgd29y"),
+        ];
 
-    #[test]
-    fn standard_encode_works_with_padding() {
         let engine = Base64::standard();
-        let encoded = engine.encode_with_padding("Many hands make light work");
-        assert_eq!(&encoded, "TWFueSBoYW5kcyBtYWtlIGxpZ2h0IHdvcms=");
+        for (input, output) in config {
+            let encoded = engine.encode(input);
+            assert_eq!(&encoded, output);
+        }
     }
 
     #[test]
     fn standard_decode_works() {
         let engine = Base64::standard();
-        let input = "Many hands make light work.";
-        let encoded = engine.encode(input);
-        let decoded = engine.decode(encoded).expect("should be able to decode");
-        let decoded_string = String::from_utf8(decoded).expect("should be a valid string");
-
-        assert_eq!(decoded_string, input);
-    }
-
-    #[test]
-    fn standard_decode_works_with_padding() {
-        let engine = Base64::standard();
         let inputs = ["Many hands make light wor", "Many hands make light work"];
         for input in inputs {
-            let encoded = engine.encode_with_padding(input);
+            let encoded = engine.encode(input);
             let decoded = engine.decode(encoded).expect("should be able to decode");
             let decoded_string = String::from_utf8(decoded).expect("should be a valid string");
 
