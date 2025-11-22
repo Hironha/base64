@@ -70,7 +70,7 @@ impl Base64 {
             let merged = match &bytes[remaining_start_at..] {
                 [first, second] => self.make_u32_from_parts(*first, *second, 0),
                 [first] => self.make_u32_from_parts(*first, 0, 0),
-                _ => self.make_u32_from_parts(0, 0, 0),
+                _ => 0u32,
             };
 
             let chars = ENCODE_RSH.iter().enumerate().map(|(i, rsh)| {
