@@ -267,4 +267,124 @@ mod tests {
             assert_eq!(all, out);
         }
     }
+
+    mod url_safe {
+        use crate::Base64;
+
+        #[test]
+        fn test_basic_ascii() {
+            let config = [
+                ("", ""),
+                ("f", "Zg=="),
+                ("fo", "Zm8="),
+                ("foo", "Zm9v"),
+                ("foobar", "Zm9vYmFy"),
+                ("light w", "bGlnaHQgdw=="),
+                ("light wo", "bGlnaHQgd28="),
+                ("light wor", "bGlnaHQgd29y"),
+            ];
+
+            let engine = Base64::url_safe();
+            for (raw, encoded) in config {
+                let out = engine.encode(raw);
+                assert_eq!(encoded, out);
+
+                let out = engine.decode(out).unwrap();
+                assert_eq!(raw.as_bytes(), out);
+            }
+        }
+
+        #[test]
+        fn test_padding_edges() {
+            let config = [
+                (Vec::from([0x01]), "AQ=="),
+                (Vec::from([0x01, 0x02]), "AQI="),
+                (Vec::from([0x01, 0x02, 0x03]), "AQID"),
+                (Vec::from([0x01, 0x02, 0x03, 0x04]), "AQIDBA=="),
+                (Vec::from([0x01, 0x02, 0x03, 0x04, 0x05]), "AQIDBAU="),
+            ];
+
+            let engine = Base64::url_safe();
+            for (raw, encoded) in config {
+                let out = engine.encode(&raw);
+                assert_eq!(out, encoded);
+
+                let out = engine.decode(out).unwrap();
+                assert_eq!(raw, out);
+            }
+        }
+
+        #[test]
+        fn test_ascii_cases() {
+            let config = [
+                ("hello", "aGVsbG8="),
+                ("Hello, world!", "SGVsbG8sIHdvcmxkIQ=="),
+                ("Base64 Encoding Test", "QmFzZTY0IEVuY29kaW5nIFRlc3Q="),
+                (
+                    "abcdefghijklmnopqrstuvwxyz",
+                    "YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXo=",
+                ),
+                (
+                    "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+                    "QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo=",
+                ),
+                ("0123456789", "MDEyMzQ1Njc4OQ=="),
+            ];
+
+            let engine = Base64::url_safe();
+            for (raw, encoded) in config {
+                let out = engine.encode(raw);
+                assert_eq!(encoded, out);
+
+                let out = engine.decode(out).unwrap();
+                assert_eq!(raw.as_bytes(), out);
+            }
+        }
+
+        #[test]
+        fn test_binary_data() {
+            let config = [(Vec::from([0, 1, 2]), "AAEC")];
+
+            let engine = Base64::url_safe();
+            for (raw, encoded) in config {
+                let out = engine.encode(&raw);
+                assert_eq!(encoded, out);
+
+                let out = engine.decode(out).unwrap();
+                assert_eq!(raw, out);
+            }
+        }
+
+        #[test]
+        fn test_utf8() {
+            let config = [
+                ("✓", "4pyT"),
+                ("こんにちは", "44GT44KT44Gr44Gh44Gv"),
+                ("😊", "8J-Yig=="),
+                ("€", "4oKs"),
+            ];
+
+            let engine = Base64::url_safe();
+            for (raw, encoded) in config {
+                let out = engine.encode(raw);
+                assert_eq!(encoded, out);
+
+                let out = engine.decode(out).unwrap();
+                assert_eq!(raw.as_bytes(), out);
+            }
+        }
+
+        #[test]
+        fn test_all_bytes() {
+            let all: Vec<u8> = (0u8..=255).collect();
+            let encoded = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0-P0BBQkNERUZHSElKS0xNTk9QUVJTVFVWV1hZWltcXV5fYGFiY2RlZmdoaWprbG1ub3BxcnN0dXZ3eHl6e3x9fn-AgYKDhIWGh4iJiouMjY6PkJGSk5SVlpeYmZqbnJ2en6ChoqOkpaanqKmqq6ytrq-wsbKztLW2t7i5uru8vb6_wMHCw8TFxsfIycrLzM3Oz9DR0tPU1dbX2Nna29zd3t_g4eLj5OXm5-jp6uvs7e7v8PHy8_T19vf4-fr7_P3-_w==";
+
+            let engine = Base64::url_safe();
+            let out = engine.encode(&all);
+            assert_eq!(encoded, out);
+
+            let out = engine.decode(out).unwrap();
+            assert_eq!(all, out);
+        }
+    }
 }
