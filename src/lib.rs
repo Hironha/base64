@@ -1,16 +1,8 @@
-const ALPHABET_STANDARD: [u8; 64] = [
-    b'A', b'B', b'C', b'D', b'E', b'F', b'G', b'H', b'I', b'J', b'K', b'L', b'M', b'N', b'O', b'P',
-    b'Q', b'R', b'S', b'T', b'U', b'V', b'W', b'X', b'Y', b'Z', b'a', b'b', b'c', b'd', b'e', b'f',
-    b'g', b'h', b'i', b'j', b'k', b'l', b'm', b'n', b'o', b'p', b'q', b'r', b's', b't', b'u', b'v',
-    b'w', b'x', b'y', b'z', b'0', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9', b'+', b'/',
-];
+const ALPHABET_STANDARD: [u8; 64] =
+    *b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
-const ALPHABET_URL_SAFE: [u8; 64] = [
-    b'A', b'B', b'C', b'D', b'E', b'F', b'G', b'H', b'I', b'J', b'K', b'L', b'M', b'N', b'O', b'P',
-    b'Q', b'R', b'S', b'T', b'U', b'V', b'W', b'X', b'Y', b'Z', b'a', b'b', b'c', b'd', b'e', b'f',
-    b'g', b'h', b'i', b'j', b'k', b'l', b'm', b'n', b'o', b'p', b'q', b'r', b's', b't', b'u', b'v',
-    b'w', b'x', b'y', b'z', b'0', b'1', b'2', b'3', b'4', b'5', b'6', b'7', b'8', b'9', b'-', b'_',
-];
+const ALPHABET_URL_SAFE: [u8; 64] =
+    *b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 
 // bitmask to get first 6 bits using &(and) operator
 const ENCODE_MASK: u32 = 0x3F;
@@ -46,13 +38,10 @@ impl Base64 {
         let bytes = bytes.as_ref();
         let mut encoded = String::with_capacity(bytes.len() * 4 / 3);
 
-        for window in bytes.chunks_exact(3) {
+        for window in bytes.as_chunks::<3>().0 {
             // merge 3 bytes in 4 base64 bytes (6 bits each)
-            let merged = match window {
-                [first, second, third] => self.make_u32_from_parts(*first, *second, *third),
-                // `chunks_exact` guarantees a window of length 3
-                w => panic!("Unexpected encode window with len {}", w.len()),
-            };
+            let [first, second, third] = window;
+            let merged = self.make_u32_from_parts(*first, *second, *third);
 
             // transform 4 merged base64 bytes (u32) into characters from alphabet
             let chars = ENCODE_RSH
@@ -101,7 +90,7 @@ impl Base64 {
         }
 
         let mut decoded = Vec::<u8>::with_capacity(bytes.len() * 3 / 4);
-        for window in unpadded.chunks_exact(4) {
+        for window in unpadded.as_chunks::<4>().0 {
             // merge of 4 base64 characters of 6 bits each
             let merged = self.decode_u32_from_base64_block(window)?;
             for rsh in DECODE_RSH.iter() {
